@@ -36,6 +36,8 @@ namespace Server.Data
                     .IsRequired()
                     .HasMaxLength(100);
 
+                entity.HasIndex(u => u.UserEmail)
+                    .IsUnique();
             });
 
             //project

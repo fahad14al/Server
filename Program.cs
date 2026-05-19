@@ -1,5 +1,6 @@
 using Server.Data;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -22,6 +23,7 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference("/scaler");
 }
 
 app.UseHttpsRedirection();
