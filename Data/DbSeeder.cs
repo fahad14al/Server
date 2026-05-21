@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Server.Models;
     
@@ -63,8 +62,6 @@ namespace Server.Data
         {
             if (await context.Users.AnyAsync()) return;
 
-            var passwordHasher = new PasswordHasher<User>();
-            
             // Define Users
             var adminUser = new User { Username = "admin", UserEmail = "admin@example.com" };
             var dev1User = new User { Username = "dev1", UserEmail = "dev1@example.com" };
@@ -77,7 +74,7 @@ namespace Server.Data
             // Hash Passwords
             foreach (var user in users)
             {
-                user.HashPassword = passwordHasher.HashPassword(user, "Password123!");
+                user.HashPassword = BCrypt.Net.BCrypt.EnhancedHashPassword("Password123!");
             }
 
             await context.Users.AddRangeAsync(users);
