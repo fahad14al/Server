@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Server.Data;
+using Server.DTOs;
 using Server.Models;
+using Server.Services;
 
 namespace Server.Controllers
 {
@@ -12,47 +13,85 @@ namespace Server.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _dbcontext;
-        private readonly PasswordHasher<User> _passwordHasher;
+        private readonly IJwtHelper _jwtHelper;
 
-        public AuthController(AppDbContext dbcontext)
+        public AuthController(AppDbContext dbcontext, IJwtHelper jwtHelper)
         {
             _dbcontext = dbcontext;
-            _passwordHasher = new PasswordHasher<User>();
+            _jwtHelper = jwtHelper;
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginRequest request)
+        public async Task<IActionResult> Login(UserLoginDto request)
         {
-            var user = await _dbcontext.Users.FirstOrDefaultAsync(u => u.UserEmail == request.UserEmail);
+            if (request == null)
+            {
+                return BadRequest("Login request is required");
+            }
+
+            var user = await _dbcontext.Users
+                .Include(u => u.UserRoles!)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.UserEmail == request.UserEmail);
+
             if (user == null)
             {
                 return Unauthorized("Invalid email or password");
             }
 
-            var result = _passwordHasher.VerifyHashedPassword(user, user.HashPassword, request.Password);
-            if (result == PasswordVerificationResult.Success)
+            bool isPasswordValid;
+            try
             {
-                return Ok(new { message = "Login successful", user = new { user.Username, user.UserEmail } });
+                isPasswordValid = BCrypt.Net.BCrypt.EnhancedVerify(request.Password, user.HashPassword);
+            }
+            catch (BCrypt.Net.SaltParseException)
+            {
+                // Handle cases where the database hash is legacy, invalid, or empty
+                return Unauthorized("Invalid email or password");
+            }
+
+            if (isPasswordValid)
+            {
+                var roles = user.UserRoles?
+                    .Select(ur => ur.Role?.RoleName ?? "")
+                    .Where(r => !string.IsNullOrEmpty(r))
+                    .ToList() ?? new List<string>();
+
+                var token = _jwtHelper.GenerateToken(user, roles);
+
+                return Ok(new 
+                { 
+                    message = "Login successful", 
+                    token = token, 
+                    user = new { user.Username, user.UserEmail, roles } 
+                });
             }
 
             return Unauthorized("Invalid email or password");
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(User user)
+        public async Task<IActionResult> Register(UserRegisterDto request)
         {
-            if (user == null) return BadRequest("User data is required");
+            if (request == null) return BadRequest("User data is required");
 
             // Check if email already exists
-            var existingUser = await _dbcontext.Users.AnyAsync(u => u.UserEmail == user.UserEmail);
+            var existingUser = await _dbcontext.Users.AnyAsync(u => u.UserEmail == request.UserEmail);
             if (existingUser)
             {
                 return Conflict("A user with this email already exists.");
             }
 
-            // Hash the plain password (user.HashPassword currently holds the plain password)
-            var hashed = _passwordHasher.HashPassword(user, user.HashPassword);
-            user.HashPassword = hashed;
+            // Hash the plain password using BCrypt
+            var hashed = BCrypt.Net.BCrypt.EnhancedHashPassword(request.Password);
+
+            // Map DTO to User model
+            var user = new User
+            {
+                Username = request.Username,
+                UserEmail = request.UserEmail,
+                HashPassword = hashed
+            };
 
             // Persist user via _dbcontext
             _dbcontext.Users.Add(user);
