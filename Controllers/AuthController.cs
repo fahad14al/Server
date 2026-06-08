@@ -93,6 +93,18 @@ namespace Server.Controllers
                 HashPassword = hashed
             };
 
+            
+            var defaultRole = await _dbcontext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Developer");
+
+            if (defaultRole != null) {
+                var userRole = new UserRole
+                {
+                    User = user,
+                    Role = defaultRole
+                };
+               await _dbcontext.UserRoles.AddAsync(userRole);
+            }
+
             // Persist user via _dbcontext
             _dbcontext.Users.Add(user);
             await _dbcontext.SaveChangesAsync();
