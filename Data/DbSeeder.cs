@@ -14,6 +14,7 @@ namespace Server.Data
             await context.Database.MigrateAsync();
 
             await SeedRolesAsync(context);
+            await SeedUsersAsync(context);
         }
 
         private static async Task CleanUpDuplicateEmails(AppDbContext context)
