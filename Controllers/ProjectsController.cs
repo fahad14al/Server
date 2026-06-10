@@ -34,6 +34,15 @@ namespace Server.Controllers
 
             await _dbContext.Projects.AddAsync(project);
             await _dbContext.SaveChangesAsync();
+            var member = new ProjectMember
+            {
+                ProjectId = project.ProjectId,
+                UserId = userid,
+                Role = "ProjectAdmin",
+                JoinedDate = DateTime.UtcNow
+            };
+            await _dbContext.ProjectMembers.AddAsync(member);
+            await _dbContext.SaveChangesAsync();
             return Ok(new {message= "Project Created",project.ProjectId});
         }
 
